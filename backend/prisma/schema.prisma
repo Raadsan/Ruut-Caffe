@@ -1,0 +1,1400 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model auditlog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entity      String
+  entityId    Int?
+  description String?
+  createdAt   DateTime @default(now())
+  user        user?    @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "auditlog_userId_fkey")
+}
+
+model category {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  description String?
+  imageUrl    String?    @db.LongText
+  updatedAt   DateTime?
+  menuitem    menuitem[]
+}
+
+model expense {
+  id            Int      @id @default(autoincrement())
+  title         String
+  amount        Float
+  category      String?
+  receiver      String?
+  date          DateTime @default(now())
+  description   String?  @db.Text
+  paymentMethod String?
+  createdById   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  createdBy     user?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+}
+
+model receiptSettings {
+  id         Int      @id @default(1)
+  name       String   @default("My Restaurant")
+  address    String?  @db.LongText
+  phone      String?  @db.LongText
+  email      String?
+  logoUrl    String?  @db.LongText
+  vatNumber  String?
+  footerText String?  @db.LongText
+  updatedAt  DateTime @updatedAt
+}
+
+model address {
+  id         Int       @id @default(autoincrement())
+  customerId Int       @db.UnsignedInt
+  name       String
+  district   String
+  street     String
+  phone      String
+  isDefault  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  customer   customers @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order      order[]
+
+  @@index([customerId])
+}
+
+model ingredient {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  unit          String
+  stockQuantity Float           @default(0)
+  minStockLevel Float           @default(0)
+  costPerUnit   Float           @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @default(now()) @updatedAt
+  menuitembom   menuitembom[]
+  stockmovement stockmovement[]
+  purchaseline  purchaseline[]
+}
+
+model menu {
+  id             Int              @id @default(autoincrement())
+  title          String
+  url            String
+  icon           String
+  order          Int              @default(0)
+  isActive       Boolean          @default(true)
+  moduleKey      MenuModuleKey    @default(RESTAURANT)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+  roleMenuAccess roleMenuAccess[]
+  submenu        submenu[]
+
+  @@index([moduleKey, isActive, order])
+}
+
+enum MenuModuleKey {
+  CORE
+  RESTAURANT
+  ACCOUNTING
+  ACCESS_CONTROL
+}
+
+model menuitem {
+  id                           Int                            @id @default(autoincrement())
+  name                         String
+  description                  String?                        @db.Text
+  costPrice                    Float?
+  price                        Float
+  tax                          Float                          @default(5)
+  discountType                 String?
+  discountValue                Float                          @default(0)
+  imageUrl                     String?                        @db.LongText
+  isAvailable                  Boolean                        @default(true)
+  isSellable                   Boolean                        @default(true)
+  isPurchasable                Boolean                        @default(false)
+  isRecommended                Boolean                        @default(false)
+  isComposite                  Boolean                        @default(false)
+  compositePricing             String                         @default("fixed") // sum | fixed
+  options                      Json?
+  categoryId                   Int
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime                       @default(now()) @updatedAt
+  category                     category                       @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  menuitembom                  menuitembom[]
+  orderitem                    orderitem[]
+  discountAdvertisementProduct discountAdvertisementProduct[]
+  compositeComponents          menuitemcomponent[]            @relation("CompositeParent")
+  usedInComposites             menuitemcomponent[]            @relation("CompositeChild")
+  cartitem                     cartitem[]
+  purchaseLines                purchaseline[]
+
+  @@index([categoryId], map: "MenuItem_categoryId_fkey")
+}
+
+model menuitemcomponent {
+  id              Int      @id @default(autoincrement())
+  compositeItemId Int
+  componentItemId Int
+  quantity        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  compositeItem   menuitem @relation("CompositeParent", fields: [compositeItemId], references: [id], onDelete: Cascade)
+  componentItem   menuitem @relation("CompositeChild", fields: [componentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([compositeItemId, componentItemId])
+  @@index([componentItemId])
+}
+
+model discountAdvertisement {
+  id              Int                            @id @default(autoincrement())
+  type            String
+  title           String?
+  description     String?                        @db.Text
+  imageUrl        String?                        @db.LongText
+  url             String?
+  discountPercent Float?
+  startAt         DateTime?
+  endAt           DateTime?
+  isActive        Boolean                        @default(true)
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+  products        discountAdvertisementProduct[]
+}
+
+model discountAdvertisementProduct {
+  id                      Int                   @id @default(autoincrement())
+  discountAdvertisementId Int
+  menuItemId              Int
+  discountAdvertisement   discountAdvertisement @relation(fields: [discountAdvertisementId], references: [id], onDelete: Cascade)
+  menuitem                menuitem              @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([discountAdvertisementId, menuItemId])
+  @@index([menuItemId])
+}
+
+model menuitembom {
+  id               Int        @id @default(autoincrement())
+  menuItemId       Int
+  ingredientId     Int
+  quantityRequired Float
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @default(now()) @updatedAt
+  ingredient       ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  menuitem         menuitem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, ingredientId])
+  @@index([ingredientId], map: "menuitembom_ingredientId_fkey")
+}
+
+model notification {
+  id              Int      @id @default(autoincrement())
+  title           String
+  message         String
+  role            String?
+  orderId         Int?
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  userId          Int?
+  customerId      Int?
+  senderId        Int?
+  senderName      String?
+  senderAvatarUrl String?  @db.Text
+  user            user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender          user?    @relation("sentNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([senderId])
+}
+
+model order {
+  id               Int              @id @default(autoincrement())
+  orderNumber      String?          @unique @db.VarChar(32)
+  companyId        Int?             @db.UnsignedInt
+  currencyId       Int?             @db.UnsignedInt
+  status           String           @default("pending")
+  total            Float            @default(0)
+  taxAmount        Float            @default(0)
+  subTotal         Float            @default(0)
+  discountAmount   Float            @default(0)
+  discountType     String?
+  discountValue    Float            @default(0)
+  tableId          Int?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @default(now()) @updatedAt
+  customerName     String?
+  notes            String?
+  customerPhone    String?
+  customerId       Int?             @db.UnsignedInt
+  userId           Int?
+  orderType        String           @default("dine-in")
+  source           String           @default("pos")
+  accountingStatus String           @default("pending") @db.VarChar(16)
+  journalEntryId   Int?             @unique @db.UnsignedInt
+  accountedAt      DateTime?
+  accountingError  String?          @db.Text
+  addressId        Int?
+  address          address?         @relation(fields: [addressId], references: [id])
+  customer         customers?       @relation(fields: [customerId], references: [id])
+  company          companies?       @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  currency         currencies?      @relation(fields: [currencyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  journalEntry     journal_entries? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  table            table?           @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  user             user?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orderitem        orderitem[]
+
+  payment payment?
+
+  @@index([addressId])
+  @@index([tableId], map: "Order_tableId_fkey")
+  @@index([customerId], map: "order_customerId_fkey")
+  @@index([userId], map: "order_userId_fkey")
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([companyId])
+  @@index([currencyId])
+  @@index([accountingStatus])
+}
+
+model orderitem {
+  id         Int      @id @default(autoincrement())
+  quantity   Int      @default(1)
+  unitPrice  Float
+  tax        Float    @default(0)
+  orderId    Int
+  menuItemId Int
+  menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: NoAction)
+  order      order    @relation(fields: [orderId], references: [id], onDelete: NoAction)
+
+  @@index([menuItemId], map: "OrderItem_menuItemId_fkey")
+  @@index([orderId], map: "OrderItem_orderId_fkey")
+}
+
+model payment {
+  id           Int       @id @default(autoincrement())
+  orderId      Int       @unique
+  amount       Float
+  method       String
+  status       String    @default("pending")
+  paidAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  internalRef  String?   @unique
+  phone        String?
+  providerName String?
+  providerRef  String?   @unique
+  order        order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model role {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  description    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+  roleMenuAccess roleMenuAccess[]
+  user           user[]
+}
+
+model roleMenuAccess {
+  id                Int                 @id @default(autoincrement())
+  roleId            Int
+  menuId            Int
+  canView           Boolean             @default(true)
+  canAdd            Boolean             @default(false)
+  canEdit           Boolean             @default(false)
+  canDelete         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now()) @updatedAt
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
+
+  @@unique([roleId, menuId])
+  @@index([menuId], map: "roleMenuAccess_menuId_fkey")
+}
+
+model roleSubMenuAccess {
+  id               Int            @id @default(autoincrement())
+  roleMenuAccessId Int
+  subMenuId        Int
+  canView          Boolean        @default(true)
+  canAdd           Boolean        @default(false)
+  canEdit          Boolean        @default(false)
+  canDelete        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+  roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
+  submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
+
+  @@unique([roleMenuAccessId, subMenuId])
+  @@index([subMenuId], map: "roleSubMenuAccess_subMenuId_fkey")
+}
+
+model stockmovement {
+  id           Int        @id @default(autoincrement())
+  ingredientId Int
+  type         String
+  quantity     Float
+  note         String?
+  purchaseId   Int?
+  createdAt    DateTime   @default(now())
+  ingredient   ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  purchase     purchase?  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId], map: "stockmovement_ingredientId_fkey")
+  @@index([purchaseId])
+}
+
+model purchase {
+  id             Int             @id @default(autoincrement())
+  purchaseNumber String          @unique
+  supplierId     Int             @db.UnsignedInt
+  companyId      Int?            @db.UnsignedInt
+  journalEntryId Int?            @unique @db.UnsignedInt
+  purchaseDate   DateTime        @db.Date
+  totalAmount    Float           @default(0)
+  notes          String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  supplier       vendors         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines          purchaseline[]
+  stockmovements stockmovement[]
+
+  @@index([supplierId])
+  @@index([companyId])
+  @@index([purchaseDate])
+}
+
+model purchaseline {
+  id           Int        @id @default(autoincrement())
+  purchaseId   Int
+  ingredientId Int?
+  menuItemId   Int?
+  description  String     @db.VarChar(255)
+  unit         String     @db.VarChar(32)
+  quantity     Float
+  unitCost     Float
+  lineTotal    Float
+  purchase     purchase   @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  ingredient   ingredient? @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  menuItem     menuitem?    @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+
+  @@index([purchaseId])
+  @@index([ingredientId])
+  @@index([menuItemId])
+}
+
+model submenu {
+  id                Int                 @id @default(autoincrement())
+  menuId            Int
+  title             String
+  url               String
+  order             Int                 @default(0)
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now()) @updatedAt
+  roleSubMenuAccess roleSubMenuAccess[]
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@index([menuId], map: "submenu_menuId_fkey")
+}
+
+model table {
+  id          Int       @id @default(autoincrement())
+  number      Int       @unique
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  name        String?
+  description String?   @db.Text
+  qrCode      String    @unique
+  updatedAt   DateTime? @updatedAt
+  order       order[]
+  cart        cart[]
+}
+
+model cart {
+  id        Int        @id @default(autoincrement())
+  tableId   Int
+  status    String     @default("active")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  table     table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  items     cartitem[]
+
+  @@index([tableId, status])
+}
+
+model cartitem {
+  id         Int      @id @default(autoincrement())
+  cartId     Int
+  menuItemId Int
+  quantity   Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  cart       cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, menuItemId])
+  @@index([menuItemId])
+}
+
+model user {
+  id                Int            @id @default(autoincrement())
+  email             String         @unique
+  password          String
+  username          String?        @unique
+  posPin            String?
+  createdAt         DateTime       @default(now())
+  fullName          String
+  isActive          Boolean        @default(true)
+  phone             String?        @unique
+  address           String?        @db.Text
+  dateOfBirth       DateTime?
+  gender            String?
+  avatarUrl         String?        @db.LongText
+  authProvider      String?        @default("local")
+  googleId          String?        @unique
+  facebookId        String?        @unique
+  fcmToken          String?        @db.Text
+  fcmTokenUpdatedAt DateTime?
+  updatedAt         DateTime       @default(now()) @updatedAt
+  roleId            Int
+  auditlog          auditlog[]
+  notification      notification[]
+  sentNotifications notification[] @relation("sentNotifications")
+  expense           expense[]
+  order             order[]
+  role              role           @relation(fields: [roleId], references: [id], onDelete: NoAction)
+
+  @@index([roleId], map: "User_roleId_fkey")
+}
+
+model account_types {
+  id                Int                          @id @default(autoincrement()) @db.UnsignedInt
+  name              String                       @unique(map: "uq_account_types_name") @db.VarChar(64)
+  internal_group    account_types_internal_group
+  normal_balance    account_types_normal_balance
+  report_type       account_types_report_type
+  sequence          Int                          @default(10) @db.UnsignedInt
+  chart_of_accounts chart_of_accounts[]
+}
+
+model bank_accounts {
+  id                Int                @id @default(autoincrement()) @db.UnsignedInt
+  company_id        Int                @db.UnsignedInt
+  bank_id           Int                @db.UnsignedInt
+  institution_name  String             @db.VarChar(128)
+  account_name      String             @db.VarChar(128)
+  account_number    String?            @db.VarChar(64)
+  iban              String?            @db.VarChar(34)
+  currency_id       Int                @db.UnsignedInt
+  gl_account_id     Int?               @db.UnsignedInt
+  payment_method_id Int?               @db.UnsignedInt
+  journal_id        Int?               @db.UnsignedInt
+  is_active         Boolean            @default(true)
+  created_at        DateTime           @default(now()) @db.Timestamp(0)
+  updated_at        DateTime           @default(now()) @db.Timestamp(0)
+  banks             banks              @relation(fields: [bank_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_bank")
+  companies         companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_company")
+  currencies        currencies         @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_currency")
+  chart_of_accounts chart_of_accounts? @relation(fields: [gl_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_gl")
+  payment_methods   payment_methods?   @relation(fields: [payment_method_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_payment_method")
+  journals          journals?          @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_journal")
+  vendor_payments   vendor_payments[]
+
+  @@unique([bank_id, account_number], map: "uq_bank_accounts_number")
+  @@index([company_id], map: "fk_ba_company")
+  @@index([currency_id], map: "fk_ba_currency")
+  @@index([gl_account_id], map: "fk_ba_gl")
+  @@index([payment_method_id], map: "fk_ba_payment_method")
+  @@index([journal_id], map: "fk_ba_journal")
+}
+
+model banks {
+  id            Int             @id @default(autoincrement()) @db.UnsignedInt
+  name          String          @unique(map: "uq_banks_name") @db.VarChar(128)
+  swift_bic     String?         @db.VarChar(11)
+  address       String?         @db.VarChar(255)
+  city          String?         @db.VarChar(128)
+  country       String?         @db.VarChar(128)
+  phone         String?         @db.VarChar(32)
+  is_active     Boolean         @default(true)
+  created_at    DateTime        @default(now()) @db.Timestamp(0)
+  updated_at    DateTime        @default(now()) @db.Timestamp(0)
+  bank_accounts bank_accounts[]
+}
+
+model chart_of_accounts {
+  id                                                             Int                      @id @default(autoincrement()) @db.UnsignedInt
+  company_id                                                     Int                      @db.UnsignedInt
+  code                                                           String                   @db.VarChar(16)
+  name                                                           String                   @db.VarChar(128)
+  account_type_id                                                Int                      @db.UnsignedInt
+  parent_id                                                      Int?                     @db.UnsignedInt
+  currency_id                                                    Int?                     @db.UnsignedInt
+  is_reconcilable                                                Boolean                  @default(false)
+  allow_manual_entry                                             Boolean                  @default(true)
+  is_active                                                      Boolean                  @default(true)
+  notes                                                          String?                  @db.Text
+  created_at                                                     DateTime                 @default(now()) @db.Timestamp(0)
+  updated_at                                                     DateTime                 @default(now()) @db.Timestamp(0)
+  bank_accounts                                                  bank_accounts[]
+  payment_methods                                                payment_methods[]
+  companies                                                      companies                @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_company")
+  currencies                                                     currencies?              @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_currency")
+  chart_of_accounts                                              chart_of_accounts?       @relation("chart_of_accountsTochart_of_accounts", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_parent")
+  other_chart_of_accounts                                        chart_of_accounts[]      @relation("chart_of_accountsTochart_of_accounts")
+  account_types                                                  account_types            @relation(fields: [account_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_type")
+  customer_invoice_lines                                         customer_invoice_lines[]
+  customer_invoices                                              customer_invoices[]
+  customers                                                      customers[]
+  journal_items                                                  journal_items[]
+  journals_journals_default_credit_account_idTochart_of_accounts journals[]               @relation("journals_default_credit_account_idTochart_of_accounts")
+  journals_journals_default_debit_account_idTochart_of_accounts  journals[]               @relation("journals_default_debit_account_idTochart_of_accounts")
+  products_products_expense_account_idTochart_of_accounts        products[]               @relation("products_expense_account_idTochart_of_accounts")
+  products_products_income_account_idTochart_of_accounts         products[]               @relation("products_income_account_idTochart_of_accounts")
+  taxes                                                          taxes[]
+  vendor_bill_lines                                              vendor_bill_lines[]
+  vendor_bills                                                   vendor_bills[]
+  vendors                                                        vendors[]
+  vendor_advances                                                vendor_advances[]
+
+  @@unique([company_id, code], map: "uq_coa_company_code")
+  @@index([currency_id], map: "fk_coa_currency")
+  @@index([parent_id], map: "idx_coa_parent")
+  @@index([account_type_id], map: "idx_coa_type")
+}
+
+model companies {
+  id                Int                 @id @default(autoincrement()) @db.UnsignedInt
+  name              String              @db.VarChar(128)
+  legal_name        String?             @db.VarChar(255)
+  tax_id            String?             @db.VarChar(64)
+  currency_id       Int                 @db.UnsignedInt
+  address           String?             @db.VarChar(255)
+  city              String?             @db.VarChar(128)
+  country           String?             @db.VarChar(128)
+  phone             String?             @db.VarChar(32)
+  email             String?             @db.VarChar(128)
+  is_active         Boolean             @default(true)
+  created_at        DateTime            @default(now()) @db.Timestamp(0)
+  updated_at        DateTime            @default(now()) @db.Timestamp(0)
+  bank_accounts     bank_accounts[]
+  chart_of_accounts chart_of_accounts[]
+  currencies        currencies          @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_companies_currency")
+  customer_invoices customer_invoices[]
+  customer_receipts customer_receipts[]
+  customers         customers[]
+  fiscal_years      fiscal_years[]
+  journal_entries   journal_entries[]
+  journals          journals[]
+  order             order[]
+  vendor_bills      vendor_bills[]
+  vendor_payments   vendor_payments[]
+  vendor_advances   vendor_advances[]
+  vendors           vendors[]
+
+  @@index([currency_id], map: "fk_companies_currency")
+}
+
+model currencies {
+  id                Int                 @id @default(autoincrement()) @db.UnsignedInt
+  code              String              @unique(map: "uq_currencies_code") @db.Char(3)
+  name              String              @db.VarChar(64)
+  symbol            String              @default("") @db.VarChar(8)
+  decimal_places    Int                 @default(2) @db.UnsignedTinyInt
+  is_active         Boolean             @default(true)
+  created_at        DateTime            @default(now()) @db.Timestamp(0)
+  updated_at        DateTime            @default(now()) @db.Timestamp(0)
+  bank_accounts     bank_accounts[]
+  chart_of_accounts chart_of_accounts[]
+  companies         companies[]
+  customer_invoices customer_invoices[]
+  customer_receipts customer_receipts[]
+  customers         customers[]
+  journal_items     journal_items[]
+  journals          journals[]
+  order             order[]
+  vendor_bills      vendor_bills[]
+  vendor_payments   vendor_payments[]
+  vendor_advances   vendor_advances[]
+  vendors           vendors[]
+}
+
+model customer_invoice_lines {
+  id                Int               @id @default(autoincrement()) @db.UnsignedInt
+  invoice_id        Int               @db.UnsignedInt
+  sequence          Int               @default(10) @db.UnsignedInt
+  product_id        Int?              @db.UnsignedInt
+  description       String            @db.VarChar(255)
+  quantity          Decimal           @default(1.0000) @db.Decimal(15, 4)
+  unit_price        Decimal           @default(0.0000) @db.Decimal(15, 4)
+  discount_percent  Decimal           @default(0.0000) @db.Decimal(7, 4)
+  tax_id            Int?              @db.UnsignedInt
+  income_account_id Int               @db.UnsignedInt
+  subtotal          Decimal?          @db.Decimal(15, 2)
+  chart_of_accounts chart_of_accounts @relation(fields: [income_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cil_income")
+  customer_invoices customer_invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cil_invoice")
+  products          products?         @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cil_product")
+  taxes             taxes?            @relation(fields: [tax_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cil_tax")
+
+  @@index([income_account_id], map: "fk_cil_income")
+  @@index([product_id], map: "fk_cil_product")
+  @@index([tax_id], map: "fk_cil_tax")
+  @@index([invoice_id], map: "idx_cil_invoice")
+}
+
+model customer_invoices {
+  id                      Int                             @id @default(autoincrement()) @db.UnsignedInt
+  company_id              Int                             @db.UnsignedInt
+  document_type           customer_invoices_document_type @default(invoice)
+  invoice_number          String?                         @db.VarChar(32)
+  customer_id             Int                             @db.UnsignedInt
+  journal_id              Int                             @db.UnsignedInt
+  fiscal_period_id        Int?                            @db.UnsignedInt
+  invoice_date            DateTime                        @db.Date
+  due_date                DateTime?                       @db.Date
+  payment_term_id         Int?                            @db.UnsignedInt
+  currency_id             Int                             @db.UnsignedInt
+  exchange_rate           Decimal                         @default(1.000000) @db.Decimal(15, 6)
+  receivable_account_id   Int                             @db.UnsignedInt
+  reversed_invoice_id     Int?                            @db.UnsignedInt
+  customer_reference      String?                         @db.VarChar(64)
+  state                   customer_invoices_state         @default(draft)
+  payment_state           customer_invoices_payment_state @default(not_paid)
+  amount_untaxed          Decimal                         @default(0.00) @db.Decimal(15, 2)
+  amount_tax              Decimal                         @default(0.00) @db.Decimal(15, 2)
+  amount_total            Decimal                         @default(0.00) @db.Decimal(15, 2)
+  paid_amount             Decimal                         @default(0.00) @db.Decimal(15, 2)
+  amount_due              Decimal                         @default(0.00) @db.Decimal(15, 2)
+  journal_entry_id        Int?                            @db.UnsignedInt
+  notes                   String?                         @db.Text
+  posted_at               DateTime?                       @db.Timestamp(0)
+  created_at              DateTime                        @default(now()) @db.Timestamp(0)
+  updated_at              DateTime                        @default(now()) @db.Timestamp(0)
+  customer_invoice_lines  customer_invoice_lines[]
+  chart_of_accounts       chart_of_accounts               @relation(fields: [receivable_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_ar")
+  companies               companies                       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_company")
+  currencies              currencies                      @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_currency")
+  customers               customers                       @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_customer")
+  journal_entries         journal_entries?                @relation(fields: [journal_entry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_je")
+  journals                journals                        @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_journal")
+  fiscal_periods          fiscal_periods?                 @relation(fields: [fiscal_period_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_period")
+  customer_invoices       customer_invoices?              @relation("customer_invoicesTocustomer_invoices", fields: [reversed_invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_reversed")
+  other_customer_invoices customer_invoices[]             @relation("customer_invoicesTocustomer_invoices")
+  payment_terms           payment_terms?                  @relation(fields: [payment_term_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ci_terms")
+  receipt_allocations     receipt_allocations[]
+
+  @@unique([company_id, invoice_number], map: "uq_ci_company_number")
+  @@index([receivable_account_id], map: "fk_ci_ar")
+  @@index([currency_id], map: "fk_ci_currency")
+  @@index([journal_entry_id], map: "fk_ci_je")
+  @@index([journal_id], map: "fk_ci_journal")
+  @@index([fiscal_period_id], map: "fk_ci_period")
+  @@index([reversed_invoice_id], map: "fk_ci_reversed")
+  @@index([payment_term_id], map: "fk_ci_terms")
+  @@index([customer_id], map: "idx_ci_customer")
+  @@index([invoice_date], map: "idx_ci_date")
+  @@index([state, payment_state], map: "idx_ci_state")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model customer_receipts {
+  id                  Int                     @id @default(autoincrement()) @db.UnsignedInt
+  company_id          Int                     @db.UnsignedInt
+  receipt_number      String?                 @db.VarChar(32)
+  customer_id         Int                     @db.UnsignedInt
+  journal_id          Int                     @db.UnsignedInt
+  payment_method_id   Int                     @db.UnsignedInt
+  fiscal_period_id    Int?                    @db.UnsignedInt
+  receipt_date        DateTime                @db.Date
+  currency_id         Int                     @db.UnsignedInt
+  exchange_rate       Decimal                 @default(1.000000) @db.Decimal(15, 6)
+  amount              Decimal                 @db.Decimal(15, 2)
+  unallocated_amount  Decimal                 @default(0.00) @db.Decimal(15, 2)
+  reference           String?                 @db.VarChar(64)
+  memo                String?                 @db.VarChar(255)
+  state               customer_receipts_state @default(draft)
+  journal_entry_id    Int?                    @db.UnsignedInt
+  posted_at           DateTime?               @db.Timestamp(0)
+  created_at          DateTime                @default(now()) @db.Timestamp(0)
+  updated_at          DateTime                @default(now()) @db.Timestamp(0)
+  companies           companies               @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_company")
+  currencies          currencies              @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_currency")
+  customers           customers               @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_customer")
+  journal_entries     journal_entries?        @relation(fields: [journal_entry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_je")
+  journals            journals                @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_journal")
+  payment_methods     payment_methods         @relation(fields: [payment_method_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_method")
+  fiscal_periods      fiscal_periods?         @relation(fields: [fiscal_period_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cr_period")
+  receipt_allocations receipt_allocations[]
+
+  @@unique([company_id, receipt_number], map: "uq_cr_company_number")
+  @@index([currency_id], map: "fk_cr_currency")
+  @@index([journal_entry_id], map: "fk_cr_je")
+  @@index([journal_id], map: "fk_cr_journal")
+  @@index([payment_method_id], map: "fk_cr_method")
+  @@index([fiscal_period_id], map: "fk_cr_period")
+  @@index([customer_id], map: "idx_cr_customer")
+  @@index([receipt_date], map: "idx_cr_date")
+}
+
+model customers {
+  id                    Int                    @id @default(autoincrement()) @db.UnsignedInt
+  company_id            Int                    @db.UnsignedInt
+  customer_code         String?                @db.VarChar(16)
+  name                  String                 @db.VarChar(128)
+  partner_type          customers_partner_type @default(company)
+  tax_id                String?                @db.VarChar(64)
+  email                 String?                @db.VarChar(128)
+  phone                 String?                @db.VarChar(32)
+  address               String?                @db.VarChar(255)
+  city                  String?                @db.VarChar(128)
+  country               String?                @db.VarChar(128)
+  currency_id           Int?                   @db.UnsignedInt
+  payment_term_id       Int?                   @db.UnsignedInt
+  receivable_account_id Int?                   @db.UnsignedInt
+  credit_limit          Decimal                @default(0.00) @db.Decimal(15, 2)
+  notes                 String?                @db.Text
+  is_active             Boolean                @default(true)
+  created_at            DateTime               @default(now()) @db.Timestamp(0)
+  updated_at            DateTime               @default(now()) @db.Timestamp(0)
+  addresses             address[]
+  order                 order[]
+  customer_invoices     customer_invoices[]
+  customer_receipts     customer_receipts[]
+  chart_of_accounts     chart_of_accounts?     @relation(fields: [receivable_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cust_ar")
+  companies             companies              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cust_company")
+  currencies            currencies?            @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cust_currency")
+  payment_terms         payment_terms?         @relation(fields: [payment_term_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cust_terms")
+
+  @@unique([company_id, customer_code], map: "uq_customers_company_code")
+  @@index([receivable_account_id], map: "fk_cust_ar")
+  @@index([currency_id], map: "fk_cust_currency")
+  @@index([payment_term_id], map: "fk_cust_terms")
+  @@index([name], map: "idx_customers_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fiscal_periods {
+  id                Int                  @id @default(autoincrement()) @db.UnsignedInt
+  fiscal_year_id    Int                  @db.UnsignedInt
+  name              String               @db.VarChar(32)
+  period_number     Int                  @db.UnsignedTinyInt
+  start_date        DateTime             @db.Date
+  end_date          DateTime             @db.Date
+  state             fiscal_periods_state @default(open)
+  is_closing_period Boolean              @default(false)
+  customer_invoices customer_invoices[]
+  customer_receipts customer_receipts[]
+  fiscal_years      fiscal_years         @relation(fields: [fiscal_year_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_fp_year")
+  journal_entries   journal_entries[]
+  vendor_bills      vendor_bills[]
+  vendor_payments   vendor_payments[]
+
+  @@unique([fiscal_year_id, period_number], map: "uq_fp_year_number")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fiscal_years {
+  id             Int                @id @default(autoincrement()) @db.UnsignedInt
+  company_id     Int                @db.UnsignedInt
+  name           String             @db.VarChar(32)
+  start_date     DateTime           @db.Date
+  end_date       DateTime           @db.Date
+  state          fiscal_years_state @default(open)
+  created_at     DateTime           @default(now()) @db.Timestamp(0)
+  updated_at     DateTime           @default(now()) @db.Timestamp(0)
+  fiscal_periods fiscal_periods[]
+  companies      companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_fy_company")
+
+  @@unique([company_id, name], map: "uq_fy_company_name")
+}
+
+model journal_entries {
+  id                    Int                         @id @default(autoincrement()) @db.UnsignedInt
+  company_id            Int                         @db.UnsignedInt
+  journal_id            Int                         @db.UnsignedInt
+  entry_number          String?                     @db.VarChar(32)
+  entry_date            DateTime                    @db.Date
+  fiscal_period_id      Int?                        @db.UnsignedInt
+  reference             String?                     @db.VarChar(64)
+  narration             String?                     @db.VarChar(255)
+  state                 journal_entries_state       @default(draft)
+  source_type           journal_entries_source_type @default(manual)
+  source_id             Int?                        @db.UnsignedInt
+  reversed_entry_id     Int?                        @db.UnsignedInt
+  posted_at             DateTime?                   @db.Timestamp(0)
+  created_at            DateTime                    @default(now()) @db.Timestamp(0)
+  updated_at            DateTime                    @default(now()) @db.Timestamp(0)
+  customer_invoices     customer_invoices[]
+  customer_receipts     customer_receipts[]
+  companies             companies                   @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_je_company")
+  journals              journals                    @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_je_journal")
+  fiscal_periods        fiscal_periods?             @relation(fields: [fiscal_period_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_je_period")
+  journal_entries       journal_entries?            @relation("journal_entriesTojournal_entries", fields: [reversed_entry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_je_reversed")
+  other_journal_entries journal_entries[]           @relation("journal_entriesTojournal_entries")
+  journal_items         journal_items[]
+  vendor_bills          vendor_bills[]
+  vendor_payments       vendor_payments[]
+  order                 order?
+
+  @@unique([company_id, entry_number], map: "uq_je_company_number")
+  @@unique([source_type, source_id], map: "uq_je_source")
+  @@index([fiscal_period_id], map: "fk_je_period")
+  @@index([reversed_entry_id], map: "fk_je_reversed")
+  @@index([entry_date], map: "idx_je_date")
+  @@index([journal_id], map: "idx_je_journal")
+  @@index([source_type, source_id], map: "idx_je_source")
+  @@index([state], map: "idx_je_state")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model journal_items {
+  id                Int                         @id @default(autoincrement()) @db.UnsignedInt
+  entry_id          Int                         @db.UnsignedInt
+  sequence          Int                         @default(10) @db.UnsignedInt
+  account_id        Int                         @db.UnsignedInt
+  label             String?                     @db.VarChar(255)
+  partner_type      journal_items_partner_type?
+  partner_id        Int?                        @db.UnsignedInt
+  debit             Decimal                     @default(0.00) @db.Decimal(15, 2)
+  credit            Decimal                     @default(0.00) @db.Decimal(15, 2)
+  currency_id       Int?                        @db.UnsignedInt
+  amount_currency   Decimal?                    @db.Decimal(15, 2)
+  is_reconciled     Boolean                     @default(false)
+  matching_number   String?                     @db.VarChar(16)
+  chart_of_accounts chart_of_accounts           @relation(fields: [account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ji_account")
+  currencies        currencies?                 @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ji_currency")
+  journal_entries   journal_entries             @relation(fields: [entry_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ji_entry")
+
+  @@index([currency_id], map: "fk_ji_currency")
+  @@index([account_id], map: "idx_ji_account")
+  @@index([entry_id], map: "idx_ji_entry")
+  @@index([matching_number], map: "idx_ji_matching")
+  @@index([partner_type, partner_id], map: "idx_ji_partner")
+}
+
+model journals {
+  id                                                                      Int                   @id @default(autoincrement()) @db.UnsignedInt
+  company_id                                                              Int                   @db.UnsignedInt
+  name                                                                    String                @db.VarChar(128)
+  code                                                                    String                @db.VarChar(8)
+  journal_type                                                            journals_journal_type
+  default_debit_account_id                                                Int?                  @db.UnsignedInt
+  default_credit_account_id                                               Int?                  @db.UnsignedInt
+  currency_id                                                             Int?                  @db.UnsignedInt
+  sequence_prefix                                                         String                @default("") @db.VarChar(16)
+  next_sequence                                                           Int                   @default(1) @db.UnsignedInt
+  is_active                                                               Boolean               @default(true)
+  allow_manual_entries                                                    Boolean               @default(false)
+  created_at                                                              DateTime              @default(now()) @db.Timestamp(0)
+  updated_at                                                              DateTime              @default(now()) @db.Timestamp(0)
+  bank_accounts                                                           bank_accounts[]
+  customer_invoices                                                       customer_invoices[]
+  customer_receipts                                                       customer_receipts[]
+  journal_entries                                                         journal_entries[]
+  companies                                                               companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_journals_company")
+  chart_of_accounts_journals_default_credit_account_idTochart_of_accounts chart_of_accounts?    @relation("journals_default_credit_account_idTochart_of_accounts", fields: [default_credit_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_journals_credit")
+  currencies                                                              currencies?           @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_journals_currency")
+  chart_of_accounts_journals_default_debit_account_idTochart_of_accounts  chart_of_accounts?    @relation("journals_default_debit_account_idTochart_of_accounts", fields: [default_debit_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_journals_debit")
+  vendor_bills                                                            vendor_bills[]
+  vendor_payments                                                         vendor_payments[]
+
+  @@unique([company_id, code], map: "uq_journals_company_code")
+  @@index([default_credit_account_id], map: "fk_journals_credit")
+  @@index([currency_id], map: "fk_journals_currency")
+  @@index([default_debit_account_id], map: "fk_journals_debit")
+  @@index([journal_type], map: "idx_journals_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payment_allocations {
+  id               Int             @id @default(autoincrement()) @db.UnsignedInt
+  payment_id       Int             @db.UnsignedInt
+  bill_id          Int             @db.UnsignedInt
+  allocated_amount Decimal         @db.Decimal(15, 2)
+  allocated_at     DateTime        @default(now()) @db.Timestamp(0)
+  vendor_bills     vendor_bills    @relation(fields: [bill_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pa_bill")
+  vendor_payments  vendor_payments @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pa_payment")
+
+  @@unique([payment_id, bill_id], map: "uq_pa_payment_bill")
+  @@index([bill_id], map: "fk_pa_bill")
+}
+
+model payment_methods {
+  id                 Int                          @id @default(autoincrement()) @db.UnsignedInt
+  name               String                       @db.VarChar(64)
+  code               String                       @unique(map: "uq_payment_methods_code") @db.VarChar(16)
+  payment_type       payment_methods_payment_type @default(both)
+  gl_account_id      Int?                         @db.UnsignedInt
+  allow_multiple_accounts Boolean                 @default(false)
+  requires_reference Boolean                      @default(false)
+  is_active          Boolean                      @default(true)
+  created_at         DateTime                     @default(now()) @db.Timestamp(0)
+  updated_at         DateTime                     @default(now()) @db.Timestamp(0)
+  chart_of_accounts  chart_of_accounts?           @relation(fields: [gl_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pm_gl")
+  bank_accounts      bank_accounts[]
+  customer_receipts  customer_receipts[]
+  vendor_payments    vendor_payments[]
+
+  @@index([gl_account_id], map: "fk_pm_gl")
+}
+
+model payment_term_lines {
+  id              Int                           @id @default(autoincrement()) @db.UnsignedInt
+  payment_term_id Int                           @db.UnsignedInt
+  sequence        Int                           @default(10) @db.UnsignedInt
+  value_type      payment_term_lines_value_type @default(balance)
+  value_amount    Decimal                       @default(0.0000) @db.Decimal(12, 4)
+  due_days        Int                           @default(0) @db.UnsignedInt
+  day_of_month    Int?                          @db.UnsignedTinyInt
+  payment_terms   payment_terms                 @relation(fields: [payment_term_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ptl_term")
+
+  @@index([payment_term_id], map: "idx_ptl_term")
+}
+
+model payment_terms {
+  id                 Int                  @id @default(autoincrement()) @db.UnsignedInt
+  name               String               @unique(map: "uq_payment_terms_name") @db.VarChar(64)
+  description        String?              @db.VarChar(255)
+  is_active          Boolean              @default(true)
+  created_at         DateTime             @default(now()) @db.Timestamp(0)
+  updated_at         DateTime             @default(now()) @db.Timestamp(0)
+  customer_invoices  customer_invoices[]
+  customers          customers[]
+  payment_term_lines payment_term_lines[]
+  vendor_bills       vendor_bills[]
+  vendors            vendors[]
+}
+
+model product_categories {
+  id                       Int                  @id @default(autoincrement()) @db.UnsignedInt
+  name                     String               @unique(map: "uq_prod_cat_name") @db.VarChar(128)
+  parent_id                Int?                 @db.UnsignedInt
+  product_categories       product_categories?  @relation("product_categoriesToproduct_categories", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_prod_cat_parent")
+  other_product_categories product_categories[] @relation("product_categoriesToproduct_categories")
+  products                 products[]
+
+  @@index([parent_id], map: "fk_prod_cat_parent")
+}
+
+model products {
+  id                                                               Int                      @id @default(autoincrement()) @db.UnsignedInt
+  sku                                                              String?                  @unique(map: "uq_products_sku") @db.VarChar(32)
+  name                                                             String                   @db.VarChar(128)
+  description                                                      String?                  @db.Text
+  product_type                                                     products_product_type    @default(goods)
+  category_id                                                      Int?                     @db.UnsignedInt
+  uom                                                              String                   @default("unit") @db.VarChar(16)
+  can_be_sold                                                      Boolean                  @default(true)
+  can_be_purchased                                                 Boolean                  @default(false)
+  list_price                                                       Decimal                  @default(0.00) @db.Decimal(15, 2)
+  standard_cost                                                    Decimal                  @default(0.00) @db.Decimal(15, 2)
+  income_account_id                                                Int?                     @db.UnsignedInt
+  expense_account_id                                               Int?                     @db.UnsignedInt
+  sale_tax_id                                                      Int?                     @db.UnsignedInt
+  purchase_tax_id                                                  Int?                     @db.UnsignedInt
+  is_active                                                        Boolean                  @default(true)
+  created_at                                                       DateTime                 @default(now()) @db.Timestamp(0)
+  updated_at                                                       DateTime                 @default(now()) @db.Timestamp(0)
+  customer_invoice_lines                                           customer_invoice_lines[]
+  product_categories                                               product_categories?      @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_prod_category")
+  chart_of_accounts_products_expense_account_idTochart_of_accounts chart_of_accounts?       @relation("products_expense_account_idTochart_of_accounts", fields: [expense_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_prod_expense")
+  chart_of_accounts_products_income_account_idTochart_of_accounts  chart_of_accounts?       @relation("products_income_account_idTochart_of_accounts", fields: [income_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_prod_income")
+  taxes_products_purchase_tax_idTotaxes                            taxes?                   @relation("products_purchase_tax_idTotaxes", fields: [purchase_tax_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_prod_pur_tax")
+  taxes_products_sale_tax_idTotaxes                                taxes?                   @relation("products_sale_tax_idTotaxes", fields: [sale_tax_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_prod_sale_tax")
+  vendor_bill_lines                                                vendor_bill_lines[]
+
+  @@index([category_id], map: "fk_prod_category")
+  @@index([expense_account_id], map: "fk_prod_expense")
+  @@index([income_account_id], map: "fk_prod_income")
+  @@index([purchase_tax_id], map: "fk_prod_pur_tax")
+  @@index([sale_tax_id], map: "fk_prod_sale_tax")
+  @@index([name], map: "idx_products_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model receipt_allocations {
+  id                Int               @id @default(autoincrement()) @db.UnsignedInt
+  receipt_id        Int               @db.UnsignedInt
+  invoice_id        Int               @db.UnsignedInt
+  allocated_amount  Decimal           @db.Decimal(15, 2)
+  allocated_at      DateTime          @default(now()) @db.Timestamp(0)
+  customer_invoices customer_invoices @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ra_invoice")
+  customer_receipts customer_receipts @relation(fields: [receipt_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ra_receipt")
+
+  @@unique([receipt_id, invoice_id], map: "uq_ra_receipt_invoice")
+  @@index([invoice_id], map: "fk_ra_invoice")
+}
+
+model taxes {
+  id                                       Int                      @id @default(autoincrement()) @db.UnsignedInt
+  name                                     String                   @unique(map: "uq_taxes_name") @db.VarChar(64)
+  tax_scope                                taxes_tax_scope          @default(both)
+  rate_percent                             Decimal                  @default(0.0000) @db.Decimal(7, 4)
+  tax_account_id                           Int?                     @db.UnsignedInt
+  price_includes_tax                       Boolean                  @default(false)
+  is_active                                Boolean                  @default(true)
+  created_at                               DateTime                 @default(now()) @db.Timestamp(0)
+  updated_at                               DateTime                 @default(now()) @db.Timestamp(0)
+  customer_invoice_lines                   customer_invoice_lines[]
+  products_products_purchase_tax_idTotaxes products[]               @relation("products_purchase_tax_idTotaxes")
+  products_products_sale_tax_idTotaxes     products[]               @relation("products_sale_tax_idTotaxes")
+  chart_of_accounts                        chart_of_accounts?       @relation(fields: [tax_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_taxes_account")
+  vendor_bill_lines                        vendor_bill_lines[]
+
+  @@index([tax_account_id], map: "fk_taxes_account")
+}
+
+model vendor_bill_lines {
+  id                 Int               @id @default(autoincrement()) @db.UnsignedInt
+  bill_id            Int               @db.UnsignedInt
+  sequence           Int               @default(10) @db.UnsignedInt
+  product_id         Int?              @db.UnsignedInt
+  description        String            @db.VarChar(255)
+  quantity           Decimal           @default(1.0000) @db.Decimal(15, 4)
+  unit_price         Decimal           @default(0.0000) @db.Decimal(15, 4)
+  discount_percent   Decimal           @default(0.0000) @db.Decimal(7, 4)
+  tax_id             Int?              @db.UnsignedInt
+  expense_account_id Int               @db.UnsignedInt
+  subtotal           Decimal?          @db.Decimal(15, 2)
+  vendor_bills       vendor_bills      @relation(fields: [bill_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_vbl_bill")
+  chart_of_accounts  chart_of_accounts @relation(fields: [expense_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vbl_expense")
+  products           products?         @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vbl_product")
+  taxes              taxes?            @relation(fields: [tax_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vbl_tax")
+
+  @@index([expense_account_id], map: "fk_vbl_expense")
+  @@index([product_id], map: "fk_vbl_product")
+  @@index([tax_id], map: "fk_vbl_tax")
+  @@index([bill_id], map: "idx_vbl_bill")
+}
+
+model vendor_bills {
+  id                          Int                           @id @default(autoincrement()) @db.UnsignedInt
+  company_id                  Int                           @db.UnsignedInt
+  document_type               vendor_bills_document_type    @default(bill)
+  bill_number                 String?                       @db.VarChar(32)
+  vendor_id                   Int                           @db.UnsignedInt
+  vendor_reference            String?                       @db.VarChar(64)
+  journal_id                  Int                           @db.UnsignedInt
+  fiscal_period_id            Int?                          @db.UnsignedInt
+  bill_date                   DateTime                      @db.Date
+  received_date               DateTime?                     @db.Date
+  due_date                    DateTime?                     @db.Date
+  payment_term_id             Int?                          @db.UnsignedInt
+  currency_id                 Int                           @db.UnsignedInt
+  exchange_rate               Decimal                       @default(1.000000) @db.Decimal(15, 6)
+  payable_account_id          Int                           @db.UnsignedInt
+  reversed_bill_id            Int?                          @db.UnsignedInt
+  state                       vendor_bills_state            @default(draft)
+  payment_state               vendor_bills_payment_state    @default(not_paid)
+  amount_untaxed              Decimal                       @default(0.00) @db.Decimal(15, 2)
+  amount_tax                  Decimal                       @default(0.00) @db.Decimal(15, 2)
+  amount_total                Decimal                       @default(0.00) @db.Decimal(15, 2)
+  amount_paid                 Decimal                       @default(0.00) @db.Decimal(15, 2)
+  amount_due                  Decimal                       @default(0.00) @db.Decimal(15, 2)
+  journal_entry_id            Int?                          @db.UnsignedInt
+  notes                       String?                       @db.Text
+  posted_at                   DateTime?                     @db.Timestamp(0)
+  created_at                  DateTime                      @default(now()) @db.Timestamp(0)
+  updated_at                  DateTime                      @default(now()) @db.Timestamp(0)
+  payment_allocations         payment_allocations[]
+  vendor_advance_applications vendor_advance_applications[]
+  vendor_bill_lines           vendor_bill_lines[]
+  chart_of_accounts           chart_of_accounts             @relation(fields: [payable_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_ap")
+  companies                   companies                     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_company")
+  currencies                  currencies                    @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_currency")
+  journal_entries             journal_entries?              @relation(fields: [journal_entry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_je")
+  journals                    journals                      @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_journal")
+  fiscal_periods              fiscal_periods?               @relation(fields: [fiscal_period_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_period")
+  vendor_bills                vendor_bills?                 @relation("vendor_billsTovendor_bills", fields: [reversed_bill_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_reversed")
+  other_vendor_bills          vendor_bills[]                @relation("vendor_billsTovendor_bills")
+  payment_terms               payment_terms?                @relation(fields: [payment_term_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_terms")
+  vendors                     vendors                       @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vb_vendor")
+
+  @@unique([company_id, bill_number], map: "uq_vb_company_number")
+  @@unique([vendor_id, vendor_reference], map: "uq_vb_vendor_reference")
+  @@index([payable_account_id], map: "fk_vb_ap")
+  @@index([currency_id], map: "fk_vb_currency")
+  @@index([journal_entry_id], map: "fk_vb_je")
+  @@index([journal_id], map: "fk_vb_journal")
+  @@index([fiscal_period_id], map: "fk_vb_period")
+  @@index([reversed_bill_id], map: "fk_vb_reversed")
+  @@index([payment_term_id], map: "fk_vb_terms")
+  @@index([bill_date], map: "idx_vb_date")
+  @@index([state, payment_state], map: "idx_vb_state")
+  @@index([vendor_id], map: "idx_vb_vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_payments {
+  id                  Int                   @id @default(autoincrement()) @db.UnsignedInt
+  company_id          Int                   @db.UnsignedInt
+  payment_number      String?               @db.VarChar(32)
+  vendor_id           Int                   @db.UnsignedInt
+  journal_id          Int                   @db.UnsignedInt
+  payment_method_id   Int                   @db.UnsignedInt
+  bank_account_id     Int?                  @db.UnsignedInt
+  fiscal_period_id    Int?                  @db.UnsignedInt
+  payment_date        DateTime              @db.Date
+  currency_id         Int                   @db.UnsignedInt
+  exchange_rate       Decimal               @default(1.000000) @db.Decimal(15, 6)
+  amount              Decimal               @db.Decimal(15, 2)
+  unallocated_amount  Decimal               @default(0.00) @db.Decimal(15, 2)
+  reference           String?               @db.VarChar(64)
+  memo                String?               @db.VarChar(255)
+  state               vendor_payments_state @default(draft)
+  journal_entry_id    Int?                  @db.UnsignedInt
+  posted_at           DateTime?             @db.Timestamp(0)
+  created_at          DateTime              @default(now()) @db.Timestamp(0)
+  updated_at          DateTime              @default(now()) @db.Timestamp(0)
+  payment_allocations payment_allocations[]
+  vendor_advances     vendor_advances[]
+  bank_accounts       bank_accounts?        @relation(fields: [bank_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_bank")
+  companies           companies             @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_company")
+  currencies          currencies            @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_currency")
+  journal_entries     journal_entries?      @relation(fields: [journal_entry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_je")
+  journals            journals              @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_journal")
+  payment_methods     payment_methods       @relation(fields: [payment_method_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_method")
+  fiscal_periods      fiscal_periods?       @relation(fields: [fiscal_period_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_period")
+  vendors             vendors               @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vp_vendor")
+
+  @@unique([company_id, payment_number], map: "uq_vp_company_number")
+  @@index([bank_account_id], map: "fk_vp_bank")
+  @@index([currency_id], map: "fk_vp_currency")
+  @@index([journal_entry_id], map: "fk_vp_je")
+  @@index([journal_id], map: "fk_vp_journal")
+  @@index([payment_method_id], map: "fk_vp_method")
+  @@index([fiscal_period_id], map: "fk_vp_period")
+  @@index([payment_date], map: "idx_vp_date")
+  @@index([vendor_id], map: "idx_vp_vendor")
+}
+
+model vendor_advances {
+  id                 Int                           @id @default(autoincrement()) @db.UnsignedInt
+  company_id         Int                           @db.UnsignedInt
+  vendor_id          Int                           @db.UnsignedInt
+  currency_id        Int                           @db.UnsignedInt
+  payment_id         Int                           @unique @db.UnsignedInt
+  advance_account_id Int                           @db.UnsignedInt
+  original_amount    Decimal                       @db.Decimal(15, 2)
+  remaining_amount   Decimal                       @db.Decimal(15, 2)
+  state              String                        @default("open") @db.VarChar(16)
+  created_at         DateTime                      @default(now()) @db.Timestamp(0)
+  updated_at         DateTime                      @default(now()) @db.Timestamp(0)
+  companies          companies                     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_va_company")
+  vendors            vendors                       @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_va_vendor")
+  currencies         currencies                    @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_va_currency")
+  vendor_payments    vendor_payments               @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_va_payment")
+  chart_of_accounts  chart_of_accounts             @relation(fields: [advance_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_va_account")
+  applications       vendor_advance_applications[]
+
+  @@index([vendor_id, currency_id, state], map: "idx_va_available")
+  @@index([advance_account_id], map: "fk_va_account")
+}
+
+model vendor_advance_applications {
+  id              Int             @id @default(autoincrement()) @db.UnsignedInt
+  advance_id      Int             @db.UnsignedInt
+  bill_id         Int             @db.UnsignedInt
+  amount          Decimal         @db.Decimal(15, 2)
+  applied_at      DateTime        @default(now()) @db.Timestamp(0)
+  vendor_advances vendor_advances @relation(fields: [advance_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vaa_advance")
+  vendor_bills    vendor_bills    @relation(fields: [bill_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vaa_bill")
+
+  @@unique([advance_id, bill_id], map: "uq_vaa_advance_bill")
+  @@index([bill_id], map: "fk_vaa_bill")
+}
+
+model vendors {
+  id                   Int                  @id @default(autoincrement()) @db.UnsignedInt
+  company_id           Int                  @db.UnsignedInt
+  vendor_code          String?              @db.VarChar(16)
+  name                 String               @db.VarChar(128)
+  partner_type         vendors_partner_type @default(company)
+  tax_id               String?              @db.VarChar(64)
+  email                String?              @db.VarChar(128)
+  phone                String?              @db.VarChar(32)
+  address              String?              @db.VarChar(255)
+  city                 String?              @db.VarChar(128)
+  country              String?              @db.VarChar(128)
+  currency_id          Int?                 @db.UnsignedInt
+  payment_term_id      Int?                 @db.UnsignedInt
+  payable_account_id   Int?                 @db.UnsignedInt
+  default_bank_account String?              @db.VarChar(64)
+  notes                String?              @db.Text
+  is_active            Boolean              @default(true)
+  created_at           DateTime             @default(now()) @db.Timestamp(0)
+  updated_at           DateTime             @default(now()) @db.Timestamp(0)
+  vendor_bills         vendor_bills[]
+  vendor_payments      vendor_payments[]
+  vendor_advances      vendor_advances[]
+  purchases            purchase[]
+  chart_of_accounts    chart_of_accounts?   @relation(fields: [payable_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_ap")
+  companies            companies            @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_company")
+  currencies           currencies?          @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_currency")
+  payment_terms        payment_terms?       @relation(fields: [payment_term_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_terms")
+
+  @@unique([company_id, vendor_code], map: "uq_vendors_company_code")
+  @@index([payable_account_id], map: "fk_ven_ap")
+  @@index([currency_id], map: "fk_ven_currency")
+  @@index([payment_term_id], map: "fk_ven_terms")
+  @@index([name], map: "idx_vendors_name")
+}
+
+enum account_types_internal_group {
+  asset
+  liability
+  equity
+  income
+  expense
+}
+
+enum customer_invoices_document_type {
+  invoice
+  credit_note
+}
+
+enum taxes_tax_scope {
+  sale
+  purchase
+  both
+}
+
+enum vendor_bills_document_type {
+  bill
+  refund
+}
+
+enum account_types_normal_balance {
+  debit
+  credit
+}
+
+enum payment_methods_payment_type {
+  inbound
+  outbound
+  both
+}
+
+enum payment_term_lines_value_type {
+  percent
+  fixed
+  balance
+}
+
+enum account_types_report_type {
+  balance_sheet
+  profit_loss
+}
+
+enum customers_partner_type {
+  individual
+  company
+}
+
+enum journals_journal_type {
+  sale
+  purchase
+  cash
+  bank
+  general
+  opening_balance @map("Opening Balance")
+  adjustment      @map("Adjustment")
+  closing         @map("Closing")
+}
+
+enum products_product_type {
+  goods
+  service
+}
+
+enum vendors_partner_type {
+  individual
+  company
+}
+
+enum fiscal_years_state {
+  open
+  closed
+}
+
+enum journal_items_partner_type {
+  customer
+  vendor
+}
+
+enum fiscal_periods_state {
+  open
+  closed
+}
+
+enum journal_entries_state {
+  draft
+  posted
+  cancelled
+}
+
+enum journal_entries_source_type {
+  manual
+  customer_invoice
+  customer_receipt
+  vendor_bill
+  vendor_payment
+  pos_order
+  restaurant_purchase
+  vendor_advance
+}
+
+enum customer_receipts_state {
+  draft
+  posted
+  cancelled
+}
+
+enum customer_invoices_state {
+  draft
+  posted
+  cancelled
+}
+
+enum vendor_payments_state {
+  draft
+  posted
+  cancelled
+}
+
+enum customer_invoices_payment_state {
+  not_paid
+  partial
+  paid
+  reversed
+}
+
+enum vendor_bills_state {
+  draft
+  posted
+  cancelled
+}
+
+enum vendor_bills_payment_state {
+  not_paid
+  partial
+  paid
+  reversed
+}

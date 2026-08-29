@@ -1,0 +1,45 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "prisma generate",
+    "postinstall": "prisma generate",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:pos-accounting": "node --test test/posOrderAccounting.test.js",
+    "server": "nodemon server.js --ignore 'client/'",
+    "client": "npm run dev --prefix ../frontend",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "prod": "concurrently \"node server.js\" \"npm start --prefix ../frontend\"",
+    "db:migrate": "npx prisma migrate dev",
+    "db:generate": "npx prisma generate",
+    "db:studio": "npx prisma studio",
+    "db:seed": "node prisma/seed-system.js",
+    "db:test": "node prisma/test-db.mjs",
+    "create-admin": "node prisma/create-admin.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1103.0",
+    "bcryptjs": "^3.0.3",
+    "concurrently": "^10.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "firebase-admin": "^13.10.0",
+    "google-auth-library": "^10.7.0",
+    "jsonwebtoken": "^9.0.3",
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@prisma/client": "^5.22.0",
+    "nodemon": "^3.1.14",
+    "prisma": "^5.22.0"
+  }
+}

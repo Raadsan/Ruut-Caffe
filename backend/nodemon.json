@@ -1,0 +1,7 @@
+{
+  "watch": ["src", "server.js", ".env"],
+  "ext": "js,json,env",
+  "delay": "800",
+  "signal": "SIGTERM",
+  "ignore": ["node_modules", "generated", "prisma/migrations"]
+}

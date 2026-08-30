@@ -3,16 +3,9 @@ import { Server } from 'socket.io'
 let io
 
 export const initSocket = (server) => {
-  const allowedOrigins = [
-    "http://localhost:2005",
-    "http://127.0.0.1:2005",
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_URL_PROD
-  ].filter(Boolean);
-
   io = new Server(server, {
     cors: {
-      origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+      origin: true,
       credentials: true
     }
   })

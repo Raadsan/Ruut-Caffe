@@ -6,11 +6,22 @@ import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receip
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { Loader2, AlertCircle } from "lucide-react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:7005/api`
-    : "http://localhost:7005/api");
+const getApiUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    if (protocol === "https:" || (!host.includes("localhost") && !host.includes("127.0.0.1") && !/^\d+\.\d+\.\d+\.\d+$/.test(host))) {
+      return `${protocol}//${host}/api`;
+    }
+    return `${protocol}//${host}:7005/api`;
+  }
+  return "http://localhost:7005/api";
+};
+
+const API_URL = getApiUrl();
 
 export default function OrderTicketPage() {
   const params = useParams();

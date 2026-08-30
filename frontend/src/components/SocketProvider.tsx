@@ -36,6 +36,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       if (typeof window !== 'undefined') {
         const protocol = window.location.protocol;
         const host = window.location.hostname;
+        if (protocol === 'https:' || (!host.includes('localhost') && !host.includes('127.0.0.1') && !/^\d+\.\d+\.\d+\.\d+$/.test(host))) {
+          return `${protocol}//${host}`;
+        }
         return `${protocol}//${host}:7005`;
       }
       return 'http://localhost:7005';

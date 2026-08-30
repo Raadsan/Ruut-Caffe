@@ -1037,14 +1037,7 @@ export const createPosCheckout = async (req, res) => {
           },
         },
       },
-      select: {
-        id: true,
-        total: true,
-        subTotal: true,
-        taxAmount: true,
-        status: true,
-        tableId: true,
-      },
+      include: orderListLightInclude,
     })
 
     await processCompletedPOSOrderSafely(order.id, 'POS checkout payment')
@@ -1054,13 +1047,7 @@ export const createPosCheckout = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: {
-        id: order.id,
-        total: order.total,
-        subTotal: order.subTotal,
-        taxAmount: order.taxAmount,
-        status: order.status,
-      },
+      data: order,
     })
 
     void Promise.all([
@@ -1381,10 +1368,13 @@ export const getOrderQueueCounts = async (req, res) => {
 export const getAllOrders = async (req, res) => {
   try {
     const cacheKey = orderListCacheKey(req)
+    const userRole = req.user?.role?.toLowerCase()
+    const isClientRole = userRole === 'client' || userRole === 'customer'
+    const ttl = isClientRole ? 3000 : ORDER_LIST_TTL_MS
     const now = Date.now()
     const cached = orderListCache.get(cacheKey)
 
-    if (cached && now - cached.at < ORDER_LIST_TTL_MS) {
+    if (cached && now - cached.at < ttl) {
       return res.json({ success: true, data: cached.data })
     }
 
@@ -1418,7 +1408,6 @@ export const getAllOrders = async (req, res) => {
       where.createdAt = createdAt
     }
 
-    const userRole = req.user?.role?.toLowerCase()
     let useLightInclude = false
     let takeLimit
 
@@ -1456,7 +1445,12 @@ export const getAllOrders = async (req, res) => {
     } else {
       const ownOrdersOnly = ['client', 'customer', 'waiter']
       if (ownOrdersOnly.includes(userRole)) {
-        where.userId = req.user.id
+        const conditions = []
+        if (req.user?.id) conditions.push({ userId: req.user.id })
+        if (req.user?.phone) conditions.push({ customerPhone: req.user.phone })
+        if (conditions.length > 0) {
+          where.OR = conditions
+        }
       } else if (onlyMine === 'true' && req.user?.id) {
         where.userId = req.user.id
       }

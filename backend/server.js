@@ -88,7 +88,7 @@ server.listen(PORT, () => {
   setImmediate(async () => {
     const dbOk = await verifyDatabase()
     if (!dbOk) return
-
+    console.log("Localhost: ", PORT)
     if (skipStartupWarmup) {
       console.log('✅ Database run successfully')
       return

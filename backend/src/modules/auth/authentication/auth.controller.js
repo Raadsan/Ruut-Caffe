@@ -22,6 +22,7 @@ function formatAuthUser(user) {
 }
 import bcrypt from 'bcryptjs'
 import generateToken from '../../../utils/generateToken.js'
+import { issueAuthTokens, issueAccessToken } from '../../../utils/authTokens.js'
 import {
   verifyGoogleToken,
   verifyFacebookToken,
@@ -162,7 +163,7 @@ export const login = async (req, res) => {
       })
     }
 
-    const token = generateToken(user)
+    const { token, refreshToken } = issueAuthTokens(user)
     setAuthCookies(res, user, token)
 
     prisma.auditlog
@@ -180,6 +181,7 @@ export const login = async (req, res) => {
       success: true,
       message: 'Login successful',
       token,
+      refreshToken,
       user: {
         id: user.id,
         fullName: user.fullName,
@@ -258,12 +260,13 @@ export const register = async (req, res) => {
       include: { role: true }
     })
 
-    const token = generateToken(user)
+    const { token, refreshToken } = issueAuthTokens(user, 'client')
 
     res.status(201).json({
       success: true,
       message: 'Registration successful',
       token,
+      refreshToken,
       user: formatAuthUser(user)
     })
   } catch (error) {
@@ -600,19 +603,57 @@ export const refresh = async (req, res) => {
   try {
     const refreshToken = readCookie(req, REFRESH_COOKIE)
     if (!refreshToken) return res.status(401).json({ success: false, message: 'Session expired' })
+
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
     if (decoded.type !== 'refresh') throw new Error('Invalid token type')
-    const user = await prisma.user.findUnique({ where: { id: decoded.id }, include: { role: true } })
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      include: { role: true },
+    })
     if (!user?.isActive) {
       clearAuthCookies(res)
       return res.status(401).json({ success: false, message: 'Session expired' })
     }
-    const authContext = decoded.authContext === 'pos' ? 'pos' : 'dashboard'
-    const token = generateToken(user, '15m', 'access', authContext)
+
+    const authContext = decoded.authContext === 'pos' ? 'pos' : decoded.authContext || 'dashboard'
+    const token = issueAccessToken(user, authContext)
     setAuthCookies(res, user, token, authContext)
     return res.status(200).json({ success: true, token })
   } catch {
     clearAuthCookies(res)
+    return res.status(401).json({ success: false, message: 'Session expired' })
+  }
+}
+
+export const refreshMobileToken = async (req, res) => {
+  try {
+    const refreshToken = req.body?.refreshToken
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      return res.status(401).json({ success: false, message: 'Session expired' })
+    }
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
+    if (decoded.type !== 'refresh') throw new Error('Invalid token type')
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      include: { role: true },
+    })
+    if (!user?.isActive) {
+      return res.status(401).json({ success: false, message: 'Session expired' })
+    }
+
+    const authContext = decoded.authContext || 'client'
+    const tokens = issueAuthTokens(user, authContext)
+
+    return res.status(200).json({
+      success: true,
+      token: tokens.token,
+      refreshToken: tokens.refreshToken,
+    })
+  } catch (error) {
+    console.error('Mobile token refresh failed:', error.message)
     return res.status(401).json({ success: false, message: 'Session expired' })
   }
 }

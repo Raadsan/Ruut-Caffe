@@ -1097,7 +1097,7 @@ export const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ success: false })
     }
 
-    const userRole = req.user?.role?.toLowerCase()
+    const userRole = req.user?.role?.toLowerCase()?.trim()
 
     if (userRole === 'kitchen' || userRole === 'pos') {
       // Takeaway: allow direct jump to served (skip kitchen steps)
@@ -1368,7 +1368,7 @@ export const getOrderQueueCounts = async (req, res) => {
 export const getAllOrders = async (req, res) => {
   try {
     const cacheKey = orderListCacheKey(req)
-    const userRole = req.user?.role?.toLowerCase()
+    const userRole = req.user?.role?.toLowerCase()?.trim()
     const isClientRole = userRole === 'client' || userRole === 'customer'
     const ttl = isClientRole ? 3000 : ORDER_LIST_TTL_MS
     const now = Date.now()

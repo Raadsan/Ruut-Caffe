@@ -1,7 +1,7 @@
 import { OAuth2Client } from 'google-auth-library'
 import bcrypt from 'bcryptjs'
 import prisma from '../config/db.js'
-import generateToken from './generateToken.js'
+import { issueAuthTokens } from './authTokens.js'
 
 function googleAudiences() {
   return [
@@ -218,7 +218,7 @@ export async function loginOrRegisterWithSocial({
     throw new Error('INACTIVE')
   }
 
-  const token = generateToken(user)
+  const { token, refreshToken } = issueAuthTokens(user, normalizedAudience === 'client' ? 'client' : 'dashboard')
 
   await prisma.auditlog.create({
     data: {
@@ -232,6 +232,7 @@ export async function loginOrRegisterWithSocial({
   const { password, role, ...rest } = user
   return {
     token,
+    refreshToken,
     user: {
       ...rest,
       role: role.name,

@@ -19,6 +19,9 @@ const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol;
     const host = window.location.hostname;
+    if (protocol === 'https:' || (!host.includes('localhost') && !host.includes('127.0.0.1') && !/^\d+\.\d+\.\d+\.\d+$/.test(host))) {
+      return `${protocol}//${host}/api`;
+    }
     return `${protocol}//${host}:7005/api`;
   }
   return 'http://127.0.0.1:7005/api';
